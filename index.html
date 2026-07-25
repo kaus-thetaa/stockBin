@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockBin — Smart Cabinet Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #000000;
+    --panel: #0d0d0d;
+    --panel-raised: #131313;
+    --rivet: #2a2a2a;
+    --line: #262626;
+    --text: #e7e7e7;
+    --text-dim: #8a8a8a;
+    --accent: #d0d0d0;      /* light grey HUD accent instead of cyan */
+    --accent-dim: #4a4a4a;
+    --amber: #f5a623;
+    --working: #2ea043;
+    --repair: #f0883e;
+    --broken: #da3633;
+    --missing: #6e1414;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    background-image:
+      radial-gradient(circle at 20% 0%, rgba(255,255,255,0.06), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(255,255,255,0.04), transparent 40%);
+  }
+  h1,h2,h3,.display{font-family:'Barlow Condensed', sans-serif; letter-spacing:0.02em;}
+
+  /* ---------- Header ---------- */
+  header{
+    padding:28px 24px 20px;
+    border-bottom:1px solid var(--line);
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .brand-row{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .tag{
+    font-size:11px; color:var(--bg); background:var(--accent);
+    padding:3px 8px; border-radius:2px; font-weight:700; letter-spacing:0.08em;
+  }
+  h1{font-size:32px; font-weight:800; margin:0; color:var(--text); text-transform:uppercase;}
+  .meta-row{display:flex; gap:24px; flex-wrap:wrap; font-size:12px; color:var(--text-dim);}
+  .meta-row b{color:var(--text);}
+  .search-wrap{position:relative; max-width:520px;}
+  #searchInput{
+    width:100%; padding:12px 14px 12px 40px; background:var(--panel);
+    border:1px solid var(--line); border-radius:4px; color:var(--text);
+    font-family:'IBM Plex Mono', monospace; font-size:14px;
+  }
+  #searchInput:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(255,255,255,0.15);}
+  .search-wrap svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:0.5;}
+  #searchResults{
+    position:absolute; top:calc(100% + 6px); left:0; right:0;
+    background:var(--panel-raised); border:1px solid var(--line); border-radius:4px;
+    max-height:320px; overflow-y:auto; z-index:20; display:none;
+  }
+  .result-row{
+    padding:10px 14px; border-bottom:1px solid var(--line); cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; font-size:13px;
+  }
+  .result-row:last-child{border-bottom:none;}
+  .result-row:hover{background:rgba(255,255,255,0.08);}
+  .result-name{color:var(--text); font-weight:600;}
+  .result-sub{color:var(--text-dim); font-size:11px;}
+  .status-chip{font-size:10px; padding:2px 7px; border-radius:20px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;}
+
+  /* ---------- Dashboard ---------- */
+  .dashboard{
+    display:grid; grid-template-columns:repeat(6,1fr); gap:1px;
+    background:var(--line); border:1px solid var(--line); margin:24px;
+    border-radius:4px; overflow:hidden;
+  }
+  .stat{background:var(--panel); padding:16px 12px; text-align:center;}
+  .stat .num{font-family:'Barlow Condensed'; font-size:30px; font-weight:800; color:var(--text);}
+  .stat .lbl{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-top:2px;}
+  .stat.working .num{color:var(--working);}
+  .stat.repair .num{color:var(--repair);}
+  .stat.broken .num{color:var(--broken);}
+  .stat.missing .num{color:#e05a5a;}
+
+  /* ---------- Cabinet ---------- */
+  .cabinet-section{margin:24px;}
+  .cabinet-title{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .cabinet-title .display{font-size:22px; font-weight:700; margin:0; text-transform:uppercase;}
+  .cabinet-title .rule{flex:1; height:1px; background:var(--line);}
+
+  .cabinet{
+    background:linear-gradient(180deg, #161616, #0a0a0a);
+    border:1px solid var(--line); border-radius:8px; padding:18px;
+    display:grid; grid-template-columns:repeat(5,1fr); gap:12px;
+    position:relative;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.4);
+  }
+  .cabinet::before, .cabinet::after{
+    content:''; position:absolute; width:6px; height:6px; border-radius:50%;
+    background:var(--rivet); box-shadow: 0 0 0 2px rgba(0,0,0,0.3) inset;
+  }
+  .cabinet::before{top:8px; left:8px;}
+  .cabinet::after{top:8px; right:8px;}
+
+  .compartment{
+    background:#161616; border:1px solid #2c2c2c; border-radius:5px;
+    padding:14px 10px; min-height:88px; cursor:pointer; position:relative;
+    transition:transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .compartment:hover{transform:translateY(-2px); border-color:var(--accent); background:#1a1a1a;}
+  .compartment:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .compartment.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent);}
+  .compartment .num{font-family:'Barlow Condensed'; font-size:22px; font-weight:800; color:var(--text);}
+  .compartment .count{font-size:11px; color:var(--text-dim); margin-top:4px;}
+  .compartment .led{
+    position:absolute; top:10px; right:10px; width:7px; height:7px; border-radius:50%;
+    background:#3a4756;
+  }
+  .compartment.has-items .led{background:var(--accent); box-shadow:0 0 6px var(--accent);}
+  .compartment.empty{opacity:0.55;}
+
+  /* ---------- Panel (drawer) ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(6,9,12,0.6); backdrop-filter:blur(2px);
+    display:none; z-index:40;
+  }
+  .overlay.show{display:block;}
+  .drawer{
+    position:fixed; top:0; right:0; height:100%; width:min(420px, 100%);
+    background:var(--panel-raised); border-left:1px solid var(--line);
+    transform:translateX(100%); transition:transform 0.25s ease; z-index:50;
+    display:flex; flex-direction:column;
+  }
+  .drawer.show{transform:translateX(0);}
+  .drawer-header{
+    padding:20px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .drawer-header .display{font-size:24px; font-weight:800; margin:0;}
+  .drawer-header .comp-num{color:var(--accent);}
+  .close-btn{
+    background:none; border:1px solid var(--line); color:var(--text-dim);
+    width:30px; height:30px; border-radius:4px; cursor:pointer; font-size:16px;
+  }
+  .close-btn:hover{border-color:var(--accent); color:var(--accent);}
+  .drawer-body{padding:16px 20px; overflow-y:auto; flex:1;}
+  .item-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:14px; margin-bottom:12px;
+  }
+  .item-card .name{font-weight:600; font-size:14px; color:var(--text); margin-bottom:8px;}
+  .item-row{display:flex; justify-content:space-between; font-size:12px; color:var(--text-dim); padding:3px 0;}
+  .item-row b{color:var(--text); font-weight:500;}
+  .empty-msg{color:var(--text-dim); font-size:13px; text-align:center; margin-top:40px;}
+
+  footer{padding:20px 24px; color:var(--text-dim); font-size:11px; text-align:center; border-top:1px solid var(--line);}
+
+  @media (max-width:640px){
+    .dashboard{grid-template-columns:repeat(3,1fr);}
+    .cabinet{grid-template-columns:repeat(3,1fr);}
+    h1{font-size:24px;}
+  }
+  @media (max-width:420px){
+    .cabinet{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-row">
+    <div class="brand">
+      <span class="tag">STOCKBIN</span>
+      <h1>Smart Cabinet Inventory</h1>
+    </div>
+  </div>
+  <div class="meta-row">
+    <span>Last Updated: <b id="lastUpdated">—</b></span>
+    <span>Total Items: <b id="totalItemsMeta">—</b></span>
+  </div>
+  <div class="search-wrap">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8fa1b3" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="searchInput" placeholder="Search item name...">
+    <div id="searchResults"></div>
+  </div>
+</header>
+
+<div class="dashboard" id="dashboard">
+  <div class="stat"><div class="num" id="statTotalUnique">0</div><div class="lbl">Unique Items</div></div>
+  <div class="stat"><div class="num" id="statTotalQty">0</div><div class="lbl">Total Quantity</div></div>
+  <div class="stat working"><div class="num" id="statWorking">0</div><div class="lbl">Working</div></div>
+  <div class="stat repair"><div class="num" id="statRepair">0</div><div class="lbl">Needs Repair</div></div>
+  <div class="stat broken"><div class="num" id="statBroken">0</div><div class="lbl">Broken</div></div>
+  <div class="stat missing"><div class="num" id="statMissing">0</div><div class="lbl">Missing</div></div>
+</div>
+
+<div class="cabinet-section">
+  <div class="cabinet-title">
+    <h2 class="display">Storage Cabinet</h2>
+    <div class="rule"></div>
+  </div>
+  <div class="cabinet" id="cabinet"></div>
+</div>
+
+<footer>StockBin — Smart Cabinet Inventory System — data synced live from Google Sheets</footer>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <h3 class="display">Compartment <span class="comp-num" id="drawerCompNum">—</span></h3>
+    <button class="close-btn" id="closeDrawer">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<script>
+// ============================================================
+// SET THIS to your deployed Apps Script Web App URL
+// e.g. "https://script.google.com/macros/s/AKfycb.../exec"
+// ============================================================
+const API_URL = "https://script.google.com/macros/s/AKfycbyddN8zVto0_lzSNSkeWKRD9a01laBURcpfgnLfot-RFAk8tmTMYq6RETe4T2ctUauSuA/exec";
+
+const STATUS_COLORS = {
+  'Working': 'var(--working)',
+  'Needs Repair': 'var(--repair)',
+  'Broken': 'var(--broken)',
+  'Missing': 'var(--missing)'
+};
+
+let DATA = { items: [], stats: {}, compartments: {}, lastUpdated: null };
+
+async function loadData(){
+  try{
+    const res = await fetch(API_URL, {cache:"no-store"});
+    DATA = await res.json();
+  }catch(err){
+    console.error("Failed to load inventory data", err);
+  }
+  render();
+}
+
+function render(){
+  // Header meta
+  document.getElementById('lastUpdated').textContent = DATA.lastUpdated
+    ? new Date(DATA.lastUpdated).toLocaleString()
+    : '—';
+  document.getElementById('totalItemsMeta').textContent = DATA.items.length;
+
+  // Dashboard
+  const s = DATA.stats || {};
+  document.getElementById('statTotalUnique').textContent = s.totalUniqueItems ?? 0;
+  document.getElementById('statTotalQty').textContent = s.totalQuantity ?? 0;
+  document.getElementById('statWorking').textContent = s.working ?? 0;
+  document.getElementById('statRepair').textContent = s.needsRepair ?? 0;
+  document.getElementById('statBroken').textContent = s.broken ?? 0;
+  document.getElementById('statMissing').textContent = s.missing ?? 0;
+
+  // Cabinet
+  const cabinet = document.getElementById('cabinet');
+  cabinet.innerHTML = '';
+  for(let i = 1; i <= 20; i++){
+    const count = (DATA.compartments && DATA.compartments[i]) || 0;
+    const div = document.createElement('div');
+    div.className = 'compartment' + (count > 0 ? ' has-items' : ' empty');
+    div.dataset.comp = i;
+    div.tabIndex = 0;
+    div.innerHTML = `
+      <span class="led"></span>
+      <div class="num">${i}</div>
+      <div class="count">${count} item${count === 1 ? '' : 's'}</div>
+    `;
+    div.addEventListener('click', () => openCompartment(i));
+    div.addEventListener('keypress', (e) => { if(e.key === 'Enter') openCompartment(i); });
+    cabinet.appendChild(div);
+  }
+}
+
+function openCompartment(num){
+  document.querySelectorAll('.compartment').forEach(c => c.classList.remove('active'));
+  const target = document.querySelector(`.compartment[data-comp="${num}"]`);
+  if(target) target.classList.add('active');
+
+  document.getElementById('drawerCompNum').textContent = num;
+  const body = document.getElementById('drawerBody');
+  const items = DATA.items.filter(i => String(i.compartment) === String(num));
+
+  if(items.length === 0){
+    body.innerHTML = `<div class="empty-msg">No items stored in this compartment.</div>`;
+  } else {
+    body.innerHTML = items.map(i => `
+      <div class="item-card">
+        <div class="name">${escapeHtml(i.itemName)}</div>
+        <div class="item-row"><span>Quantity</span><b>${i.quantity}</b></div>
+        <div class="item-row"><span>Status</span><b style="color:${STATUS_COLORS[i.status] || 'var(--text)'}">${escapeHtml(i.status)}</b></div>
+        <div class="item-row"><span>Remarks</span><b>${escapeHtml(i.remarks) || '—'}</b></div>
+        <div class="item-row"><span>Last Modified</span><b>${i.lastModified ? new Date(i.lastModified).toLocaleString() : '—'}</b></div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+
+function closeDrawer(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('drawer').classList.remove('show');
+}
+document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
+document.getElementById('overlay').addEventListener('click', closeDrawer);
+
+// ---------- Search ----------
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim().toLowerCase();
+  if(!q){ searchResults.style.display = 'none'; return; }
+
+  const matches = DATA.items.filter(i => i.itemName.toLowerCase().includes(q)).slice(0, 20);
+  if(matches.length === 0){
+    searchResults.innerHTML = `<div class="result-row"><span class="result-sub">No matches found</span></div>`;
+  } else {
+    searchResults.innerHTML = matches.map(i => `
+      <div class="result-row" data-comp="${i.compartment}">
+        <div>
+          <div class="result-name">${escapeHtml(i.itemName)}</div>
+          <div class="result-sub">Compartment ${i.compartment} · Qty ${i.quantity}</div>
+        </div>
+        <span class="status-chip" style="background:${STATUS_COLORS[i.status] || '#555'}20; color:${STATUS_COLORS[i.status] || '#fff'}; border:1px solid ${STATUS_COLORS[i.status] || '#555'}">${escapeHtml(i.status)}</span>
+      </div>
+    `).join('');
+  }
+  searchResults.style.display = 'block';
+});
+
+searchResults.addEventListener('click', (e) => {
+  const row = e.target.closest('.result-row');
+  if(!row || !row.dataset.comp) return;
+  openCompartment(row.dataset.comp);
+  searchResults.style.display = 'none';
+  searchInput.value = '';
+  document.querySelector(`.compartment[data-comp="${row.dataset.comp}"]`)?.scrollIntoView({behavior:'smooth', block:'center'});
+});
+
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('.search-wrap')) searchResults.style.display = 'none';
+});
+
+function escapeHtml(str){
+  if(str === undefined || str === null) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// Initial load + auto-refresh every 30s so the site stays in sync with the Sheet
+loadData();
+setInterval(loadData, 30000);
+</script>
+
+</body>
+</html>
