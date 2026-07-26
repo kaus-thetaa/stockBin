@@ -2,7 +2,7 @@
 
 A live-syncing inventory tracker for a physical storage cabinet, built with Google Sheets as the database, Google Apps Script as the API layer, and a static site on GitHub Pages as the frontend. No traditional backend server — the "database" is a spreadsheet, and it just works.
 
-**Live demo:** _add your GitHub Pages link here_
+**Live demo:** _https://kaus-thetaa.github.io/stockbin/_
 **Stack:** Google Sheets · Google Apps Script · vanilla JS/HTML/CSS · GitHub Pages
 
 ---
